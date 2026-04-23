@@ -33,8 +33,8 @@ interface LessonPlanResult {
   objectives: string[];
   subjectMatter: {
     topic: string;
-    materials: string;
-    references: string;
+    materials: string | string[];
+    references: string | string[];
   };
   procedures: Procedure[];
 }
@@ -42,6 +42,7 @@ interface LessonPlanResult {
 export default function LessonPlanResultPage() {
   const router = useRouter();
   const [result, setResult] = useState<LessonPlanResult | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("lessonPlanResult");
@@ -55,9 +56,15 @@ export default function LessonPlanResultPage() {
   const normalize = (value: unknown): string => {
     if (!value) return "";
     if (Array.isArray(value)) {
-      return value.join("");
+      return value.join(", ");
     }
     return String(value);
+  };
+
+  const toArray = (value: string | string[] | undefined): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    return [value];
   };
 
   const handleDownload = async () => {
@@ -194,13 +201,27 @@ export default function LessonPlanResultPage() {
               indent: { left: 360 },
             }),
             new Paragraph({
-              children: [new TextRun({ text: "Materials: ", font: "Times New Roman", bold: true, size: 24 }), new TextRun({ text: result.subjectMatter.materials, font: "Times New Roman", size: 24 })],
+              children: [new TextRun({ text: "Materials:", font: "Times New Roman", bold: true, size: 24 })],
               indent: { left: 360 },
             }),
+            ...toArray(result.subjectMatter.materials).map(
+              (item) =>
+                new Paragraph({
+                  children: [new TextRun({ text: `• ${item}`, font: "Times New Roman", size: 24 })],
+                  indent: { left: 720 },
+                })
+            ),
             new Paragraph({
-              children: [new TextRun({ text: "References: ", font: "Times New Roman", bold: true, size: 24 }), new TextRun({ text: result.subjectMatter.references, font: "Times New Roman", size: 24 })],
+              children: [new TextRun({ text: "References:", font: "Times New Roman", bold: true, size: 24 })],
               indent: { left: 360 },
             }),
+            ...toArray(result.subjectMatter.references).map(
+              (item) =>
+                new Paragraph({
+                  children: [new TextRun({ text: `• ${item}`, font: "Times New Roman", size: 24 })],
+                  indent: { left: 720 },
+                })
+            ),
             new Paragraph({
               children: [new TextRun({ text: "III. Procedures", font: "Times New Roman", bold: true, size: 28 })],
               spacing: { before: 200, after: 200 },
@@ -211,7 +232,10 @@ export default function LessonPlanResultPage() {
       ],
     });
 
-    const blob = await Packer.toBlob(doc);
+    const buffer = await Packer.toBlob(doc);
+    const blob = new Blob([buffer], { 
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+    });
     saveAs(blob, `${result.title}.docx`);
   };
 
@@ -223,17 +247,80 @@ export default function LessonPlanResultPage() {
     );
   }
 
+  const handleCopy = async () => {
+    const materialsText = toArray(result.subjectMatter.materials).map(m => `    • ${m}`).join('\n');
+    const referencesText = toArray(result.subjectMatter.references).map(r => `    • ${r}`).join('\n');
+    
+    const proceduresText = result.procedures.map(p => {
+      const header = `\n${p.phase}`;
+      const table = `
+┌─────────────────┬────────────────────────────┬────────────────────────────┐
+│ Step            │ Teacher's Activity         │ Students' Activity         │
+├─────────────────┼────────────────────────────┼────────────────────────────┤
+${p.rows.map(r => `│ ${r.step.padEnd(15)} │ ${r.teacher.substring(0, 26).padEnd(26)} │ ${r.students.substring(0, 26).padEnd(26)} │`).join('\n')}
+└─────────────────┴────────────────────────────┴────────────────────────────┘`;
+      return header + table;
+    }).join('\n');
+
+    const text = `
+════════════════════════════════════════
+${result.title.toUpperCase()}
+════════════════════════════════════════
+
+I. OBJECTIVES
+${result.objectives.map(o => `    • ${o}`).join('\n')}
+
+II. SUBJECT MATTER
+
+    Topic: ${result.subjectMatter.topic}
+
+    Materials:
+${materialsText}
+
+    References:
+${referencesText}
+
+III. PROCEDURES
+${proceduresText}
+
+════════════════════════════════════════
+`;
+    
+    await navigator.clipboard.writeText(text.trim());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{result.title}</h1>
-        <button
-          onClick={handleDownload}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700"
-        >
-          Download DOCX
-        </button>
+      <div className="rounded-xl border-2 border-green-200 bg-green-50 p-6 mb-8 text-center">
+        <div className="flex justify-center mb-3">
+          <svg className="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold text-green-800 mb-2">Lesson Plan Ready!</h2>
+        <p className="text-green-700 mb-6">Your lesson plan has been generated successfully.</p>
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={handleDownload}
+            className="rounded-lg bg-green-600 px-8 py-3 text-white font-semibold text-lg hover:bg-green-700 shadow-lg hover:shadow-xl transition-all"
+          >
+            ⬇️ Download DOCX
+          </button>
+          <button
+            onClick={handleCopy}
+            className="rounded-lg bg-white border-2 border-green-600 px-6 py-3 text-green-700 font-semibold text-lg hover:bg-green-50 transition-all"
+          >
+            {copied ? "✓ Copied!" : "📋 Copy Lesson Plan"}
+          </button>
+        </div>
+        <p className="mt-4 text-sm text-green-700">
+          <span className="font-medium">How to use in Google Docs:</span> 1. Click &apos;Copy Lesson Plan&apos; → 2. Open Google Docs → 3. Paste (Ctrl + V)
+        </p>
       </div>
+
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">{result.title}</h1>
 
       <div className="space-y-6">
         <section>
@@ -250,10 +337,30 @@ export default function LessonPlanResultPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Subject Matter</h2>
-          <div className="space-y-1 text-gray-600">
+          <div className="space-y-3 text-gray-600">
             <p><span className="font-medium">Topic:</span> {result.subjectMatter.topic}</p>
-            <p><span className="font-medium">Materials:</span> {result.subjectMatter.materials}</p>
-            <p><span className="font-medium">References:</span> {result.subjectMatter.references}</p>
+            <div>
+              <span className="font-medium">Materials:</span>
+              <ul className="mt-1 ml-4 space-y-1">
+                {toArray(result.subjectMatter.materials).map((item, index) => (
+                  <li key={index} className="flex">
+                    <span className="mr-2">•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <span className="font-medium">References:</span>
+              <ul className="mt-1 ml-4 space-y-1">
+                {toArray(result.subjectMatter.references).map((item, index) => (
+                  <li key={index} className="flex">
+                    <span className="mr-2">•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </section>
 

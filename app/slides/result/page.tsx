@@ -58,7 +58,19 @@ export default function SlidesResultPage() {
       });
     });
 
-    pptx.writeFile({ fileName: `${result.title}.pptx` });
+    pptx.write({ outputType: "blob" }).then((data) => {
+      const blob = new Blob([data as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${result.title}.pptx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
   };
 
   if (!result) {
