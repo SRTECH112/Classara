@@ -14,18 +14,24 @@ interface SlidesResult {
   slides: Slide[];
 }
 
+function readStoredSlides(): SlidesResult | null {
+  if (typeof window === "undefined") return null;
+  const stored = sessionStorage.getItem("slidesResult");
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored) as SlidesResult;
+  } catch {
+    return null;
+  }
+}
+
 export default function SlidesResultPage() {
   const router = useRouter();
-  const [result, setResult] = useState<SlidesResult | null>(null);
+  const [result] = useState<SlidesResult | null>(readStoredSlides);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("slidesResult");
-    if (stored) {
-      setResult(JSON.parse(stored));
-    } else {
-      router.push("/slides");
-    }
-  }, [router]);
+    if (!result) router.push("/slides");
+  }, [result, router]);
 
   const handleDownload = () => {
     if (!result) return;
